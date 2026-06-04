@@ -1,0 +1,734 @@
+---
+title: "AgroGem_manuscript_final"
+author: "Shengsong Guo"
+date: "2026-03-15"
+output: html_document
+---
+
+Figure 1B
+```{r}
+# Load necessary libraries
+library(ggplot2)
+library(openxlsx)
+library(dplyr)
+
+# Read the data
+data <- read.xlsx("/Users/shengsongguo/Desktop/Zhang Lab/R:Python scripts/Barchart/Normal+grouped barchart/Normalized FU.xlsx")
+
+# Order factor levels for consistent bar placement
+data$Sample <- factor(data$Sample, levels = c(
+  "GVR-EHA105-Light", "GVR-C58C1-Light", "GVR-GV3101-Light",
+  "T-DNA-EHA105-Light", "T-DNA-C58C1-Light", "T-DNA-GV3101-Light",
+  "GVR-EHA105-Dark", "GVR-C58C1-Dark", "GVR-GV3101-Dark",
+  "T-DNA-EHA105-Dark", "T-DNA-C58C1-Dark", "T-DNA-GV3101-Dark"
+))
+
+# Create group variable for consistent coloring
+data$Group <- case_when(
+  grepl("GVR-.*-Dark", data$Sample) ~ "GVR-Dark",
+  grepl("T-DNA-.*-Dark", data$Sample) ~ "T-DNA-Dark",
+  grepl("GVR-.*-Light", data$Sample) ~ "GVR-Light",
+  grepl("T-DNA-.*-Light", data$Sample) ~ "T-DNA-Light"
+)
+
+# Compute mean and standard deviation
+summary_data <- data %>%
+  group_by(Sample, Group) %>%
+  summarise(
+    mean_rate = mean(`Normalized.FU`),
+    sd_rate = sd(`Normalized.FU`)
+  )
+
+# Plot
+ggplot(summary_data, aes(x = Sample, y = mean_rate)) +
+  geom_bar(stat = "identity", fill = "grey") +
+  geom_errorbar(aes(ymin = mean_rate - sd_rate, ymax = mean_rate + sd_rate),
+                width = 0.2) +
+  geom_point(data = data, aes(x = Sample, y = `Normalized.FU`),
+             color = "black", size = 2) +
+  scale_x_discrete(labels = rep(c("EHA105", "C58C1", "GV3101"), 4)) +  
+  labs(x = NULL, y = "Normalized RLU") +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1, face = "bold", color = "black"),
+    axis.text.y = element_text(face = "bold", color = "black"),
+    legend.position = "none",
+    panel.background = element_rect(fill = "white"),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    plot.background = element_rect(fill = "white"),
+    axis.line = element_line(color = "black"),
+    axis.ticks = element_line(color = "black"),
+    axis.title.x = element_text(face = "bold"),
+    axis.title.y = element_text(face = "bold")
+  )
+```
+
+```{r}
+library(openxlsx)
+library(dplyr)
+
+# ==========================================
+# Read Excel file
+# ==========================================
+
+df <- read.xlsx(
+  "/Users/shengsongguo/Desktop/Zhang Lab/Source_data_AgroGem.xlsx",
+  sheet = 1
+)
+
+# ==========================================
+# Keep relevant columns
+# ==========================================
+
+df <- df %>%
+  select(Sample, `Normalized.RLU`) %>%
+  filter(
+    !is.na(Sample),
+    !is.na(`Normalized.RLU`)
+  )
+
+# ==========================================
+# Log10 transform
+# ==========================================
+
+df$log10_RLU <- log10(df$`Normalized.RLU`)
+
+# ==========================================
+# One-way ANOVA
+# ==========================================
+
+anova_model <- aov(
+  log10_RLU ~ Sample,
+  data = df
+)
+
+anova_table <- as.data.frame(summary(anova_model)[[1]])
+
+write.csv(
+  anova_table,
+  "/Users/shengsongguo/Desktop/ANOVA_results.csv"
+)
+
+# ==========================================
+# Tukey HSD
+# ==========================================
+
+tukey_result <- TukeyHSD(anova_model)
+
+tukey_table <- as.data.frame(tukey_result$Sample)
+
+tukey_table$Comparison <- rownames(tukey_table)
+
+tukey_table <- tukey_table %>%
+  select(
+    Comparison,
+    diff,
+    lwr,
+    upr,
+    `p adj`
+  ) %>%
+  arrange(`p adj`)
+
+write.csv(
+  tukey_table,
+  "/Users/shengsongguo/Desktop/Tukey_HSD_results.csv",
+  row.names = FALSE
+)
+
+# ==========================================
+# Significant comparisons only
+# ==========================================
+
+significant_comparisons <- tukey_table %>%
+  filter(`p adj` < 0.05)
+
+write.csv(
+  significant_comparisons,
+  "/Users/shengsongguo/Desktop/Significant_Comparisons.csv",
+  row.names = FALSE
+)
+```
+
+Figure 2A
+```{r}
+# Load necessary libraries
+library(ggplot2)
+library(openxlsx)
+library(dplyr)
+
+# Read the data from the Excel file
+data <- read.xlsx('/Users/shengsongguo/Desktop/Zhang Lab/R:Python scripts/Barchart/3 rep barchart/Indel freq among methods.xlsx')
+
+data$Method <- factor(data$Method, levels = c("AgroGem", "AGROBEST", "Protoplast"))
+
+# Compute mean and standard deviation for each genotype
+summary_data <- data %>%
+  group_by(Method) %>%
+  summarise(
+    mean_rate = mean(`Indel_frequency`),
+    sd_rate = sd(`Indel_frequency`)
+  )
+
+# Create the bar chart with error bars
+ggplot(summary_data, aes(x = Method, y = mean_rate, fill = Method)) +
+  geom_bar(stat = "identity", position = position_dodge(), fill = "grey70") +
+  geom_errorbar(aes(ymin = mean_rate - sd_rate, ymax = mean_rate + sd_rate), width = 0.2, position = position_dodge(0.9)) +
+  geom_point(data = data, aes(x = Method, y = `Indel_frequency`), color = "black", position = position_dodge(width = 0), size = 2) +
+  labs(x = "Method",
+       y = "Indel frequency(%)") +
+  theme(axis.text.x = element_text(face = "bold", color = "black"),
+          axis.text.y = element_text(face = "bold", color = "black"), 
+          legend.position = "none", panel.background = element_rect(fill = "white"),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        plot.background = element_rect(fill = "white"),
+        axis.line = element_line(color = "black"),
+        axis.ticks = element_line(color = "black"),
+        axis.title.x = element_text(face = "bold"),
+        axis.title.y = element_text(face = "bold"))
+```
+
+Figure 2B
+```{r}
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+
+# =========================
+# 1. Define all file paths
+# =========================
+
+genotype_file_paths <- list(
+  # Col-0
+  AgroGem_WT_1 = "/Users/shengsongguo/Desktop/Zhang Lab/NGS Results/Backbone_comparison/CRISPResso_on_pSG058_Col-0_Dark_whole_plant_Rep1/Alleles_frequency_table_around_sgRNA_CGACATTCATAACAGAGACA.txt",
+  AgroGem_WT_2 = "/Users/shengsongguo/Desktop/Zhang Lab/NGS Results/Backbone_comparison/CRISPResso_on_pSG058_Col-0_Dark_whole_plant_Rep2/Alleles_frequency_table_around_sgRNA_CGACATTCATAACAGAGACA.txt",
+  AgroGem_WT_3 = "/Users/shengsongguo/Desktop/Zhang Lab/NGS Results/Backbone_comparison/CRISPResso_on_pSG058_Col-0_Dark_whole_plant_Rep3/Alleles_frequency_table_around_sgRNA_CGACATTCATAACAGAGACA.txt",
+  Floral_Dipping_WT_1 = "/Users/shengsongguo/Desktop/Zhang Lab/NGS Results/ku70:lig4 floral dipping/Col-0_MC4/Control13/CHLI2_Sample1_rep1/CRISPResso_on_22C_0xHS_MC4_CHLI2_Sample1/Alleles_frequency_table_around_sgRNA_CGACATTCATAACAGAGACA.txt",
+  Floral_Dipping_WT_2 = "/Users/shengsongguo/Desktop/Zhang Lab/NGS Results/ku70:lig4 floral dipping/Col-0_MC4/Non_HS_Control_rep2/CHLI2_rep2/CRISPResso_on_22C_0xHS_MC4_CHLI2_Sample2/Alleles_frequency_table_around_sgRNA_CGACATTCATAACAGAGACA.txt",
+  Floral_Dipping_WT_3 = "/Users/shengsongguo/Desktop/Zhang Lab/NGS Results/ku70:lig4 floral dipping/Col-0_MC4/Non_HS_Control_rep3/CHLI2_Sample3_rep3/CRISPResso_on_22C_0xHS_MC4_CHLI2_Sample3/Alleles_frequency_table_around_sgRNA_CGACATTCATAACAGAGACA.txt",
+
+  # lig4
+  AgroGem_lig4_1 = "/Users/shengsongguo/Desktop/Zhang Lab/NGS Results/DNA_repair_mutant_lines/ID318_CHLI2_MC4.1_MC4.8/ID318_CHLI2/CRISPResso_on_pSG022_ID318_CHLI2_Rep1/Alleles_frequency_table_around_sgRNA_CGACATTCATAACAGAGACA.txt",
+  AgroGem_lig4_2 = "/Users/shengsongguo/Desktop/Zhang Lab/NGS Results/DNA_repair_mutant_lines/ID318_CHLI2_MC4.1_MC4.8/ID318_CHLI2/CRISPResso_on_pSG022_ID318_CHLI2_Rep2/Alleles_frequency_table_around_sgRNA_CGACATTCATAACAGAGACA.txt",
+  AgroGem_lig4_3 = "/Users/shengsongguo/Desktop/Zhang Lab/NGS Results/DNA_repair_mutant_lines/ID318_CHLI2_MC4.1_MC4.8/ID318_CHLI2/CRISPResso_on_pSG022_ID318_CHLI2_Rep3/Alleles_frequency_table_around_sgRNA_CGACATTCATAACAGAGACA.txt",
+  Floral_Dipping_lig4_1 = "/Users/shengsongguo/Desktop/Zhang Lab/NGS Results/ku70:lig4 floral dipping/lig4_CHLI2/CRISPResso_on_Floral_dipping_lig4_Rep1/Alleles_frequency_table_around_sgRNA_CGACATTCATAACAGAGACA.txt",
+  Floral_Dipping_lig4_2 = "/Users/shengsongguo/Desktop/Zhang Lab/NGS Results/ku70:lig4 floral dipping/lig4_CHLI2/CRISPResso_on_Floral_dipping_lig4_Rep2/Alleles_frequency_table_around_sgRNA_CGACATTCATAACAGAGACA.txt",
+  Floral_Dipping_lig4_3 = "/Users/shengsongguo/Desktop/Zhang Lab/NGS Results/ku70:lig4 floral dipping/lig4_CHLI2/CRISPResso_on_Floral_dipping_lig4_Rep3/Alleles_frequency_table_around_sgRNA_CGACATTCATAACAGAGACA.txt")
+
+
+# =========================
+# 2. Function to process one file
+# =========================
+
+process_genotype_data <- function(file_path) {
+  data <- read.table(file_path, header = TRUE, sep = "\t", row.names = NULL, fill = TRUE)
+
+  colnames(data) <- c(
+    "Aligned_Sequence", "Reference_Sequence", "Unedited",
+    "n_deleted", "n_inserted", "n_mutated", "#Reads", "%Reads"
+  )
+
+  edited_sequences <- data %>%
+    filter(Unedited == "False")
+
+  total_edited_reads <- sum(edited_sequences$`#Reads`, na.rm = TRUE)
+
+  edited_sequences <- edited_sequences %>%
+    mutate(Reads_Percentage = (`#Reads` / total_edited_reads) * 100) %>%
+    group_by(Aligned_Sequence) %>%
+    summarise(
+      Reads_Percentage = sum(Reads_Percentage, na.rm = TRUE),
+      .groups = "drop"
+    )
+
+  return(edited_sequences)
+}
+
+# =========================
+# 3. Process all files
+# =========================
+
+genotype_data <- lapply(genotype_file_paths, process_genotype_data)
+
+# =========================
+# 4. Combine all samples
+# =========================
+
+edited_freq_long <- bind_rows(
+  lapply(names(genotype_data), function(sample_name) {
+    genotype_data[[sample_name]] %>%
+      select(Aligned_Sequence, Reads_Percentage) %>%
+      mutate(
+        Sample = sample_name,
+        Genotype = case_when(
+          grepl("WT", sample_name) ~ "Col-0",
+          grepl("lig4", sample_name) ~ "lig4"
+        ),
+        Method = case_when(
+          grepl("AgroGem", sample_name) ~ "AgroGem",
+          grepl("Floral_Dipping", sample_name) ~ "Floral_Dipping"
+        )
+      )
+  })
+)
+
+# =========================
+# 5. Find shared Top 20 sequences, ordered by WT frequency
+# =========================
+
+Top_30_Sequences <- edited_freq_long %>%
+  group_by(Aligned_Sequence) %>%
+  summarise(
+    Sum_Edited_Frequency = sum(Reads_Percentage, na.rm = TRUE),
+    WT_Edited_Frequency = sum(Reads_Percentage[Genotype == "Col-0"], na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  arrange(desc(Sum_Edited_Frequency)) %>%
+  slice(1:20) %>%
+  arrange(desc(WT_Edited_Frequency))
+
+sequence_order <- Top_30_Sequences$Aligned_Sequence
+
+# =========================
+# Move specific sequences to the bottom
+# =========================
+
+bottom_sequences <- c(
+  "TAGCGACATTCATAACAGAG-------------ATCTGTT",
+  "TAGCGACAT---------------GGTAACGAGATCTGTT",
+  "TAGCGACATTCAT-----------GGTAACGAGATCTGTT",
+  "TAGCGACATTCATAAC--------------GAGATCTGTT",
+  "TAGCGACATTCATAACAGA---------------TCTGTT",
+  "TA--------------------------ACGAGATCTGTT",
+  "-----------------------TGGTAACGAGATCTGTT",
+  "TAGCGA--------------------------GATCTGTT",
+  "TAGCGACATTCATAACAGAGTACATGGTAACGAGATCTGT",
+  "TAGCGACATTCATAACAGAGGACATGGTAACGAGATCTGT",
+  "TAGCGACATTCATAACAGAGAACATGGTAACGAGATCTGT"
+)
+
+# Remove them from current order first
+sequence_order <- sequence_order[!sequence_order %in% bottom_sequences]
+
+# Add them to the end
+sequence_order <- c(sequence_order, bottom_sequences)
+
+# =========================
+# 6. Calculate mean and SD across replicates
+# =========================
+
+NHEJ_avg <- edited_freq_long %>%
+  filter(Aligned_Sequence %in% sequence_order) %>%
+  group_by(Aligned_Sequence, Genotype, Method) %>%
+  summarise(
+    Mean_Reads_Percentage = mean(Reads_Percentage, na.rm = TRUE),
+    SD_Reads_Percentage = sd(Reads_Percentage, na.rm = TRUE),
+    n = n(),
+    SE_Reads_Percentage = SD_Reads_Percentage / sqrt(n),
+    .groups = "drop"
+  )
+
+# Fill missing sequence × genotype × method combinations with 0
+NHEJ_avg <- NHEJ_avg %>%
+  complete(
+    Aligned_Sequence,
+    Genotype,
+    Method,
+    fill = list(
+      Mean_Reads_Percentage = 0,
+      SD_Reads_Percentage = 0,
+      SE_Reads_Percentage = 0,
+      n = 0
+    )
+  )
+
+# Replace NA SD/SE from single-replicate cases with 0
+NHEJ_avg <- NHEJ_avg %>%
+  mutate(
+    SD_Reads_Percentage = ifelse(is.na(SD_Reads_Percentage), 0, SD_Reads_Percentage),
+    SE_Reads_Percentage = ifelse(is.na(SE_Reads_Percentage), 0, SE_Reads_Percentage)
+  )
+
+# =========================
+# 7. Restore order
+# =========================
+
+NHEJ_avg$Aligned_Sequence <- factor(
+  NHEJ_avg$Aligned_Sequence,
+  levels = rev(sequence_order)
+)
+
+NHEJ_avg$Genotype <- factor(
+  NHEJ_avg$Genotype,
+  levels = c("Col-0", "lig4")
+)
+
+NHEJ_avg$Method <- factor(
+  NHEJ_avg$Method,
+  levels = c("AgroGem", "Floral_Dipping")
+)
+
+NHEJ_avg <- NHEJ_avg %>%
+  arrange(Genotype, Method, Aligned_Sequence)
+
+# =========================
+# 8. Plot with error bars
+# =========================
+
+method_colors <- c(
+  "AgroGem" = "steelblue",
+  "Floral_Dipping" = "darkorange"
+)
+
+ggplot(NHEJ_avg, aes(x = Mean_Reads_Percentage, y = Aligned_Sequence, group = Method)) +
+  geom_errorbarh(
+    aes(
+      xmin = pmax(Mean_Reads_Percentage - SD_Reads_Percentage, 0),
+      xmax = Mean_Reads_Percentage + SD_Reads_Percentage,
+      color = Method
+    ),
+    height = 0.18,
+    size = 0.9
+  ) +
+  geom_point(aes(color = Method), size = 1) +
+  geom_path(aes(color = Method), size = 1.2) +
+  facet_wrap(~ Genotype, nrow = 1) +
+  scale_x_continuous(
+    position = "top",
+    breaks = seq(0, max(NHEJ_avg$Mean_Reads_Percentage + NHEJ_avg$SD_Reads_Percentage, na.rm = TRUE), by = 5)
+  ) +
+  scale_color_manual(values = method_colors) +
+  labs(
+    x = "Mean Reads Percentage (%)",
+    y = "Top 30 Aligned Sequences",
+    color = "Method"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.title.y = element_blank(),
+    axis.text.y = element_text(size = 8),
+    axis.title.x = element_text(size = 12),
+    axis.text.x = element_text(size = 10),
+    axis.ticks.x = element_line(),
+    legend.position = "bottom"
+  )
+
+# =========================
+# 9. Pearson correlation between methods
+# =========================
+
+NHEJ_wide <- NHEJ_avg %>%
+  select(Aligned_Sequence, Genotype, Method, Mean_Reads_Percentage) %>%
+  pivot_wider(
+    names_from = Method,
+    values_from = Mean_Reads_Percentage
+  )
+
+cor_results <- NHEJ_wide %>%
+  group_by(Genotype) %>%
+  summarise(
+    Pearson_r = cor(AgroGem, Floral_Dipping, method = "pearson"),
+    p_value = cor.test(AgroGem, Floral_Dipping)$p.value,
+    .groups = "drop"
+  )
+
+print(cor_results)
+```
+
+Figure 2C
+```{r}
+library(ggplot2)
+library(openxlsx)
+library(dplyr)
+
+# Read Cas9 data
+data_cas9 <- read.xlsx("/Users/shengsongguo/Desktop/Zhang Lab/R:Python scripts/Barchart/Normal+grouped barchart/Cas9_MC4_rates.xlsx") %>%
+  mutate(Nuclease = "Cas9")
+
+# Read Cas12a data
+data_cas12a <- read.xlsx('/Users/shengsongguo/Desktop/Zhang Lab/R:Python scripts/Barchart/Normal+grouped barchart/Cas12a_MC4 sites_mutagenesis .xlsx') %>%
+  mutate(Nuclease = "Cas12a")
+
+# Combine both datasets
+data_combined <- bind_rows(data_cas9, data_cas12a)
+
+# Set MC4 site order
+data_combined$MC4_Sites <- factor(data_combined$MC4_Sites,
+                                  levels = c("8", "7", "4", "9", "3", "1", "5", "2"))
+
+# Calculate summary statistics
+summary_combined <- data_combined %>%
+  group_by(Nuclease, MC4_Sites) %>%
+  summarise(
+    mean_rate = mean(`Overall_Mutagenesis_Rate`),
+    sd_rate = sd(`Overall_Mutagenesis_Rate`),
+    .groups = "drop"
+  )
+
+# Plot with grouped bars
+ggplot(summary_combined, aes(x = MC4_Sites, y = mean_rate, fill = Nuclease)) +
+  geom_bar(stat = "identity", position = position_dodge(0.8), width = 0.7) +
+  geom_errorbar(aes(ymin = mean_rate - sd_rate, ymax = mean_rate + sd_rate),
+                position = position_dodge(0.8), width = 0.2) +
+  geom_point(data = data_combined,
+             aes(x = MC4_Sites, y = `Overall_Mutagenesis_Rate`, group = Nuclease),
+             color = "black", position = position_dodge(width = 0.8), size = 2) +
+  scale_fill_manual(values = c("Cas9" = "#E64B35", "Cas12a" = "#1f77b4")) +
+  labs(
+    x = "MC4 Sites",
+    y = "Overall Mutagenesis Rate (%)",
+    fill = "Nuclease"
+  ) +
+  theme(
+    axis.text.x = element_text(face = "bold", color = "black", size = 14),
+    axis.text.y = element_text(face = "bold", color = "black", size = 14),
+    axis.title.x = element_text(face = "bold", size = 16),
+    axis.title.y = element_text(face = "bold", size = 16),
+    legend.title = element_text(face = "bold", size = 14),
+    legend.text = element_text(size = 12),
+    panel.background = element_rect(fill = "white"),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    plot.background = element_rect(fill = "white"),
+    axis.line = element_line(color = "black"),
+    axis.ticks = element_line(color = "black")
+  )
+
+
+## Similarity calculation: Pearson correlation
+# Step 1: Compute average mutagenesis rates by MC4 site and nuclease
+avg_rates <- data_combined %>%
+  group_by(Nuclease, MC4_Sites) %>%
+  summarise(mean_rate = mean(Overall_Mutagenesis_Rate), .groups = "drop")
+
+# Step 2: Pivot wider to have Cas9 and Cas12a side-by-side
+wide_rates <- avg_rates %>%
+  pivot_wider(names_from = Nuclease, values_from = mean_rate)
+
+# Step 3: Calculate Pearson correlation
+correlation <- cor(wide_rates$Cas9, wide_rates$Cas12a, method = "pearson")
+
+# Print the result
+correlation
+```
+
+
+```{r}
+# Step 1: Compute average mutagenesis rates by MC4 site and nuclease
+avg_rates <- data_combined %>%
+  group_by(Nuclease, MC4_Sites) %>%
+  summarise(mean_rate = mean(Overall_Mutagenesis_Rate), .groups = "drop")
+
+# Step 2: Pivot wider to have Cas9 and Cas12a side-by-side
+wide_rates <- avg_rates %>%
+  pivot_wider(names_from = Nuclease, values_from = mean_rate)
+
+# Step 3: Pearson correlation test
+cor_test <- cor.test(
+  wide_rates$Cas9,
+  wide_rates$Cas12a,
+  method = "pearson"
+)
+
+# Correlation coefficient
+correlation <- cor_test$estimate
+
+# P-value
+p_value <- cor_test$p.value
+
+# Print results
+cat("Pearson correlation (r):", round(correlation, 4), "\n")
+cat("P-value:", signif(p_value, 3), "\n")
+```
+
+Figure 3C
+```{r}
+###################################
+# Define the file paths
+###################################
+genotype_file_paths <- list(
+  WT_1 = "/Users/shengsongguo/Desktop/Zhang Lab/NGS Results/DNA_repair_mutant_lines/pSG022_CHLI2_MC4/pSG022_Col-0_CHLI2/CRISPResso_on_pSG022_Col-0_CHLI2/Alleles_frequency_table_around_sgRNA_CGACATTCATAACAGAGACA.txt",
+  WT_2 = "/Users/shengsongguo/Desktop/Zhang Lab/NGS Results/DNA_repair_mutant_lines/pSG022_CHLI2_MC4/pSG022_Col-0_CHLI2/CRISPResso_on_pSG022_Col-0_CHLI2_Rep2/Alleles_frequency_table_around_sgRNA_CGACATTCATAACAGAGACA.txt",
+  WT_3 = "/Users/shengsongguo/Desktop/Zhang Lab/NGS Results/DNA_repair_mutant_lines/pSG022_CHLI2_MC4/pSG022_Col-0_CHLI2/CRISPResso_on_pSG022_Col-0_CHLI2_Rep3/Alleles_frequency_table_around_sgRNA_CGACATTCATAACAGAGACA.txt",
+  DNA_pol_theta_1 = "/Users/shengsongguo/Desktop/Zhang Lab/NGS Results/DNA_repair_mutant_lines/ID293_CHLI2_MC4.1_MC4.8/CRISPResso_on_pSG022_ID293_CHLI2/Alleles_frequency_table_around_sgRNA_CGACATTCATAACAGAGACA.txt",
+  DNA_pol_theta_2 = "/Users/shengsongguo/Desktop/Zhang Lab/NGS Results/DNA_repair_mutant_lines/ID293_CHLI2_MC4.1_MC4.8/CRISPResso_on_pSG022_ID293_CHLI2_Rep2/Alleles_frequency_table_around_sgRNA_CGACATTCATAACAGAGACA.txt",
+  DNA_pol_theta_3 = "/Users/shengsongguo/Desktop/Zhang Lab/NGS Results/DNA_repair_mutant_lines/ID293_CHLI2_MC4.1_MC4.8/CRISPResso_on_pSG022_ID293_CHLI2_Rep3/Alleles_frequency_table_around_sgRNA_CGACATTCATAACAGAGACA.txt",
+  XRCC4_1 = "/Users/shengsongguo/Desktop/Zhang Lab/NGS Results/DNA_repair_mutant_lines/ID306_CHLI2_MC4.8/CRISPResso_on_pSG022_ID306_CHLI2_Rep1/Alleles_frequency_table_around_sgRNA_CGACATTCATAACAGAGACA.txt",
+  XRCC4_2 = "/Users/shengsongguo/Desktop/Zhang Lab/NGS Results/DNA_repair_mutant_lines/ID306_CHLI2_MC4.8/CRISPResso_on_pSG022_ID306_CHLI2_Rep2/Alleles_frequency_table_around_sgRNA_CGACATTCATAACAGAGACA.txt",
+  XRCC4_3 = "/Users/shengsongguo/Desktop/Zhang Lab/NGS Results/DNA_repair_mutant_lines/ID306_CHLI2_MC4.8/CRISPResso_on_pSG022_ID306_CHLI2_Rep3/Alleles_frequency_table_around_sgRNA_CGACATTCATAACAGAGACA.txt",
+#  Pol2b_1 = "/Users/shengsongguo/Desktop/Zhang Lab/NGS Results/DNA_repair_mutant_lines/ID297_CHLI2_MC4.1_MC4.8/CRISPResso_on_pSG022_ID297_CHLI2/Alleles_frequency_table_around_sgRNA_CGACATTCATAACAGAGACA.txt",
+#  Pol2b_2 = "/Users/shengsongguo/Desktop/Zhang Lab/NGS Results/DNA_repair_mutant_lines/ID297_CHLI2_MC4.1_MC4.8/CRISPResso_on_pSG022_ID297_CHLI2_Rep1/Alleles_frequency_table_around_sgRNA_CGACATTCATAACAGAGACA.txt",
+#  Pol2b_3 = "/Users/shengsongguo/Desktop/Zhang Lab/NGS Results/DNA_repair_mutant_lines/ID297_CHLI2_MC4.1_MC4.8/CRISPResso_on_pSG022_ID297_CHLI2_Rep3/Alleles_frequency_table_around_sgRNA_CGACATTCATAACAGAGACA.txt",
+  KU70_1 = "/Users/shengsongguo/Desktop/Zhang Lab/NGS Results/DNA_repair_mutant_lines/ID317_CHLI2_MC4.1_MC4.8/ID317_CHLI2/CRISPResso_on_pSG022_ID317_CHLI2_Rep1/Alleles_frequency_table_around_sgRNA_CGACATTCATAACAGAGACA.txt",
+  KU70_2 = "/Users/shengsongguo/Desktop/Zhang Lab/NGS Results/DNA_repair_mutant_lines/ID317_CHLI2_MC4.1_MC4.8/ID317_CHLI2/CRISPResso_on_pSG022_ID317_CHLI2_Rep2/Alleles_frequency_table_around_sgRNA_CGACATTCATAACAGAGACA.txt",
+  KU70_3 = "/Users/shengsongguo/Desktop/Zhang Lab/NGS Results/DNA_repair_mutant_lines/ID317_CHLI2_MC4.1_MC4.8/ID317_CHLI2/CRISPResso_on_pSG022_ID317_CHLI2_Rep3/Alleles_frequency_table_around_sgRNA_CGACATTCATAACAGAGACA.txt",
+  DNA_LIGASE_IV_1 = "/Users/shengsongguo/Desktop/Zhang Lab/NGS Results/DNA_repair_mutant_lines/ID318_CHLI2_MC4.1_MC4.8/ID318_CHLI2/CRISPResso_on_pSG022_ID318_CHLI2_Rep1/Alleles_frequency_table_around_sgRNA_CGACATTCATAACAGAGACA.txt",
+  DNA_LIGASE_IV_2 = "/Users/shengsongguo/Desktop/Zhang Lab/NGS Results/DNA_repair_mutant_lines/ID318_CHLI2_MC4.1_MC4.8/ID318_CHLI2/CRISPResso_on_pSG022_ID318_CHLI2_Rep2/Alleles_frequency_table_around_sgRNA_CGACATTCATAACAGAGACA.txt",
+  DNA_LIGASE_IV_3 = "/Users/shengsongguo/Desktop/Zhang Lab/NGS Results/DNA_repair_mutant_lines/ID318_CHLI2_MC4.1_MC4.8/ID318_CHLI2/CRISPResso_on_pSG022_ID318_CHLI2_Rep3/Alleles_frequency_table_around_sgRNA_CGACATTCATAACAGAGACA.txt",
+  Recql2_1 = "/Users/shengsongguo/Desktop/Zhang Lab/NGS Results/DNA_repair_mutant_lines/ID521_CHLI2_MC4.1_MC4.8/CRISPResso_on_pSG022_ID521_CHLI2/Alleles_frequency_table_around_sgRNA_CGACATTCATAACAGAGACA.txt",
+  Recql2_2 = "/Users/shengsongguo/Desktop/Zhang Lab/NGS Results/DNA_repair_mutant_lines/ID521_CHLI2_MC4.1_MC4.8/CRISPResso_on_pSG022_ID521_CHLI2_Rep2/Alleles_frequency_table_around_sgRNA_CGACATTCATAACAGAGACA.txt",
+  Recql2_3 = "/Users/shengsongguo/Desktop/Zhang Lab/NGS Results/DNA_repair_mutant_lines/ID521_CHLI2_MC4.1_MC4.8/CRISPResso_on_pSG022_ID521_CHLI2_Rep3/Alleles_frequency_table_around_sgRNA_CGACATTCATAACAGAGACA.txt",
+  ATM_1 = "/Users/shengsongguo/Desktop/Zhang Lab/NGS Results/DNA_repair_mutant_lines/ID525_CHLI2_MC4.1_MC4.8/CRISPResso_on_pSG022_ID525_CHLI2_Rep1/Alleles_frequency_table_around_sgRNA_CGACATTCATAACAGAGACA.txt",
+  ATM_2 = "/Users/shengsongguo/Desktop/Zhang Lab/NGS Results/DNA_repair_mutant_lines/ID525_CHLI2_MC4.1_MC4.8/CRISPResso_on_pSG022_ID525_CHLI2_Rep2/Alleles_frequency_table_around_sgRNA_CGACATTCATAACAGAGACA.txt",
+  ATM_3 = "/Users/shengsongguo/Desktop/Zhang Lab/NGS Results/DNA_repair_mutant_lines/ID525_CHLI2_MC4.1_MC4.8/CRISPResso_on_pSG022_ID525_CHLI2_Rep3/Alleles_frequency_table_around_sgRNA_CGACATTCATAACAGAGACA.txt",
+  XRCC1_1 = "/Users/shengsongguo/Desktop/Zhang Lab/NGS Results/DNA_repair_mutant_lines/ID530_CHLI2_MC4.1_MC4.8/CRISPResso_on_pSG022_ID530_CHLI2_Rep1/Alleles_frequency_table_around_sgRNA_CGACATTCATAACAGAGACA.txt",
+  XRCC1_2 = "/Users/shengsongguo/Desktop/Zhang Lab/NGS Results/DNA_repair_mutant_lines/ID530_CHLI2_MC4.1_MC4.8/CRISPResso_on_pSG022_ID530_CHLI2_Rep2/Alleles_frequency_table_around_sgRNA_CGACATTCATAACAGAGACA.txt",
+  XRCC1_3 = "/Users/shengsongguo/Desktop/Zhang Lab/NGS Results/DNA_repair_mutant_lines/ID530_CHLI2_MC4.1_MC4.8/CRISPResso_on_pSG022_ID530_CHLI2_Rep3/Alleles_frequency_table_around_sgRNA_CGACATTCATAACAGAGACA.txt",
+  ATR_1 = "/Users/shengsongguo/Desktop/Zhang Lab/NGS Results/DNA_repair_mutant_lines/ID548_CHLI2_MC4.1_MC4.8/CRISPResso_on_pSG022_ID548_CHLI2_Rep1/Alleles_frequency_table_around_sgRNA_CGACATTCATAACAGAGACA.txt",
+  ATR_2 = "/Users/shengsongguo/Desktop/Zhang Lab/NGS Results/DNA_repair_mutant_lines/ID548_CHLI2_MC4.1_MC4.8/CRISPResso_on_pSG022_ID548_CHLI2_Rep2/Alleles_frequency_table_around_sgRNA_CGACATTCATAACAGAGACA.txt",
+  ATR_3 = "/Users/shengsongguo/Desktop/Zhang Lab/NGS Results/DNA_repair_mutant_lines/ID548_CHLI2_MC4.1_MC4.8/CRISPResso_on_pSG022_ID548_CHLI2_Rep3/Alleles_frequency_table_around_sgRNA_CGACATTCATAACAGAGACA.txt",
+  POLQ_1 = "/Users/shengsongguo/Desktop/Zhang Lab/NGS Results/DNA_repair_mutant_lines/POLQ_CHLI2_MC4.1_MC4.8/CRISPResso_on_pSG022_POLQ_CHLI2_Rep1/Alleles_frequency_table_around_sgRNA_CGACATTCATAACAGAGACA.txt",
+  POLQ_2 = "/Users/shengsongguo/Desktop/Zhang Lab/NGS Results/DNA_repair_mutant_lines/POLQ_CHLI2_MC4.1_MC4.8/CRISPResso_on_pSG022_POLQ_CHLI2_Rep2/Alleles_frequency_table_around_sgRNA_CGACATTCATAACAGAGACA.txt",
+  POLQ_3 = "/Users/shengsongguo/Desktop/Zhang Lab/NGS Results/DNA_repair_mutant_lines/POLQ_CHLI2_MC4.1_MC4.8/CRISPResso_on_pSG022_POLQ_CHLI2_Rep3/Alleles_frequency_table_around_sgRNA_CGACATTCATAACAGAGACA.txt",
+  DNA_Pol_Lambda_1 = "/Users/shengsongguo/Desktop/Zhang Lab/NGS Results/Pol_L_variants/SG_AgroGem_control_exp/pSG007_pollKO_Sample10/CRISPResso_on_10_R1_001_10_R2_001/Alleles_frequency_table_around_sgRNA_CGACATTCATAACAGAGACA.txt",
+  DNA_Pol_Lambda_2 = "/Users/shengsongguo/Desktop/Zhang Lab/NGS Results/Pol_L_variants/SG_AgroGem_control_exp/pSG007_pollKO_Sample11/CRISPResso_on_11_R1_001_11_R2_001/Alleles_frequency_table_around_sgRNA_CGACATTCATAACAGAGACA.txt",
+  DNA_Pol_Lambda_3 = "/Users/shengsongguo/Desktop/Zhang Lab/NGS Results/Pol_L_variants/SG_AgroGem_control_exp/pSG007_pollKO_Sample12/CRISPResso_on_12_R1_001_12_R2_001/Alleles_frequency_table_around_sgRNA_CGACATTCATAACAGAGACA.txt",
+  Ku80_1 = "/Users/shengsongguo/Desktop/Zhang Lab/NGS Results/DNA_repair_mutant_lines/ID533_CHLI2_MC4.1_MC4.8/CRISPResso_on_pSG022_ID533_CHLI2/Alleles_frequency_table_around_sgRNA_CGACATTCATAACAGAGACA.txt",
+  KU80_2 = "/Users/shengsongguo/Desktop/Zhang Lab/NGS Results/DNA_repair_mutant_lines/ID533_CHLI2_MC4.1_MC4.8/CRISPResso_on_pSG022_ID533_CHLI2_Rep1/Alleles_frequency_table_around_sgRNA_CGACATTCATAACAGAGACA.txt",
+  KU80_3 = "/Users/shengsongguo/Desktop/Zhang Lab/NGS Results/DNA_repair_mutant_lines/ID533_CHLI2_MC4.1_MC4.8/CRISPResso_on_pSG022_ID533_CHLI2_Rep3/Alleles_frequency_table_around_sgRNA_CGACATTCATAACAGAGACA.txt"
+)
+
+library(dplyr)
+library(readr)
+library(purrr)
+library(stringr)
+library(tidyr)
+library(pheatmap)
+
+# ============================================================
+# 1) Process one file: remove Unedited TRUE, compute edited-only frequency, filter < cutoff
+# ============================================================
+process_one_file <- function(file_path, sample_name, freq_cutoff = 0.2) {
+
+  df <- read_tsv(file_path, col_types = cols())
+
+  # Remove unedited rows
+  edited_df <- df %>% filter(Unedited == FALSE)
+
+  total_edited_reads <- sum(edited_df$`#Reads`, na.rm = TRUE)
+
+  # Edge case: no edited reads
+  if (is.na(total_edited_reads) || total_edited_reads == 0) {
+    return(tibble(
+      Sample = sample_name,
+      Aligned_Sequence = character(0),
+      Edited_Reads = integer(0),
+      Edited_Frequency = numeric(0)
+    ))
+  }
+
+  edited_df %>%
+    group_by(Aligned_Sequence) %>%
+    summarise(
+      Edited_Reads = sum(`#Reads`, na.rm = TRUE),
+      .groups = "drop"
+    ) %>%
+    mutate(
+      Edited_Frequency = Edited_Reads / total_edited_reads * 100,
+      Sample = sample_name
+    ) %>%
+    filter(Edited_Frequency >= freq_cutoff) %>%
+    select(Sample, Aligned_Sequence, Edited_Reads, Edited_Frequency) %>%
+    arrange(desc(Edited_Frequency))
+}
+
+# ============================================================
+# 2) Run on all files (replicates stay separate as Sample columns)
+# ============================================================
+edited_freq_long <- imap_dfr(
+  genotype_file_paths,
+  ~process_one_file(.x, .y, freq_cutoff = 0.2)
+)
+
+# ============================================================
+# 3) Top 30 sequences by SUM of Edited_Frequency across ALL samples
+# ============================================================
+top30_sequences <- edited_freq_long %>%
+  group_by(Aligned_Sequence) %>%
+  summarise(
+    Sum_Edited_Frequency = sum(Edited_Frequency, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  arrange(desc(Sum_Edited_Frequency)) %>%
+  slice(1:30)
+
+# Keep only top 30 sequences
+edited_freq_top30_long <- edited_freq_long %>%
+  semi_join(top30_sequences, by = "Aligned_Sequence")
+
+# ============================================================
+# 4) Force specific sequences to the bottom in your exact order
+#    (Only affects row order if they exist in the top30 set)
+# ============================================================
+bottom_sequences <- c(
+  "TAGCGACATTCATAACAGAG-------------ATCTGTT",
+  "TAGCGACAT---------------GGTAACGAGATCTGTT",
+  "TAGCGACATTCATAAC--------------GAGATCTGTT",
+  "TAGCGACATTCAT-----------GGTAACGAGATCTGTT",
+  "TA--------------------------ACGAGATCTGTT",
+  "TAGCGACATT----------ACATGGTAACGAGATCTGTT",
+  "TAGCGACAT-----------ACATGGTAACGAGATCTGTT",
+  "TAGCGA--------------------------GATCTGTT",
+  "TAGCGACATTCATAACAGA---------------TCTGTT",
+  "TAGCGACATTCATAACAGAGTACATGGTAACGAGATCTGT",
+  "TAGCGACATTCATAACAGAGGACATGGTAACGAGATCTGT",
+  "TAGCGACATTCATAACAGAGAACATGGTAACGAGATCTGT"
+)
+
+# Only keep bottom sequences that are actually present in the top30 list
+bottom_present <- bottom_sequences[bottom_sequences %in% top30_sequences$Aligned_Sequence]
+
+# Current top30 order (by summed frequency)
+top_order <- top30_sequences$Aligned_Sequence
+
+# All other sequences (keep their original order)
+top_keep <- setdiff(top_order, bottom_present)
+
+# Final enforced order
+final_row_order <- c(top_keep, bottom_present)
+
+# Apply factor levels to lock row order
+edited_freq_top30_long$Aligned_Sequence <- factor(
+  edited_freq_top30_long$Aligned_Sequence,
+  levels = final_row_order
+)
+
+# ============================================================
+# 5) Build matrix for pheatmap: rows = sequences, cols = samples (replicates separate)
+# ============================================================
+mat_for_clust <- edited_freq_top30_long %>%
+  select(Aligned_Sequence, Sample, Edited_Frequency) %>%
+  arrange(Aligned_Sequence) %>%
+  pivot_wider(
+    names_from  = Sample,
+    values_from = Edited_Frequency,
+    values_fill = 0
+  )
+
+mat <- as.matrix(mat_for_clust[, -1])
+rownames(mat) <- mat_for_clust$Aligned_Sequence
+
+# Keep columns in the same order as genotype_file_paths (if all exist)
+mat <- mat[, intersect(names(genotype_file_paths), colnames(mat)), drop = FALSE]
+
+# ============================================================
+# 6) Heatmap
+# ============================================================
+my_palette <- colorRampPalette(c("white", "#b2182b"))(200)
+
+pheatmap(
+  mat,
+  cluster_rows   = FALSE,     # keep row order as we defined
+  cluster_cols   = TRUE,      # cluster samples (replicates separate)
+  color          = my_palette,
+  breaks         = seq(0, 20, length.out = 201),  # your template
+  angle_col      = "90",
+  fontsize_row   = 6,
+  fontsize_col   = 8,
+  border_color   = NA,
+  treeheight_row = 0,
+  treeheight_col = 40,
+  show_rownames  = TRUE,
+  cellwidth      = 12
+)
+```
